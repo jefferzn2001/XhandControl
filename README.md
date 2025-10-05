@@ -5,17 +5,21 @@ Tested on **Ubuntu 22.04** and **Windows 10/11** with **Python 3.10+**.
 
 ---
 
-## ✨ Features
 
-- ✅ **Multi-protocol support**: RS-485 and EtherCAT
-- ✅ **Device discovery & enumeration**
-- ✅ **Hand ID assignment & management**
-- ✅ **Dual-hand control** (Left ID=1, Right ID=2)
-- ✅ **Preset actions** (fist, palm, peace sign, OK gesture)
-- ✅ **Real-time state monitoring**
-- ✅ **Tactile sensor support**
-- ✅ **Interactive control examples**
-- ✅ **Comprehensive device information**
+
+- Clean API in `xhandlib/xhand.py` (removed `exam_` prefixes). Use:
+  - `open_device(...)`, `close()`
+  - `read_state(hand_id, force_update=True)`
+  - `get_sdk_version()`, `read_version(hand_id)`, `get_info(hand_id)`, `get_hand_type(hand_id)`, `get_serial_number(hand_id)`
+  - `send_command()` to send the prebuilt `_hand_command`, or `set_hand_mode(...)` to set modes
+- Unified scripts and naming:
+  - `demo.py` (mode=3) dual-hand motions
+  - `encoder.py` (mode=0) live joint angles GUI (degrees)
+  - `tactile.py` (mode=0) live tactile GUI (5 fingers per hand)
+- Standard mapping used across scripts:
+  - Left hand: `/dev/ttyUSB1`, ID=2
+  - Right hand: `/dev/ttyUSB0`, ID=1
+- After installing the SDK wheel, you can delete the `xhand_control_sdk_py/` folder.
 
 ---
 
@@ -41,14 +45,20 @@ python -m venv xhand_env
 source xhand_env/bin/activate  # Linux/Mac
 # xhand_env\Scripts\activate    # Windows
 
-# Install SDK wheel
+# Install SDK wheel (choose matching Python version)
 cd xhand_control_sdk_py
-pip install ./xhand_controller-1.1.7-cp310-cp310-linux_x86_64.whl  # Linux
+pip install ./xhand_controller-1.1.7-cp310-cp310-linux_x86_64.whl  # Python 3.10 on Linux x86_64
 # pip install ./xhand_controller-1.1.7-cp312-cp312-linux_x86_64.whl  # Python 3.12
 cd ..
 
-# Install additional dependencies if needed
-pip install numpy  # Optional for advanced control
+# After successful install, the .whl is not required to run. You can delete it
+# and optionally remove the xhand_control_sdk_py/ folder if you want a lean repo.
+
+# Install additional dependencies
+pip install numpy matplotlib
+
+# (Optional) Add current directory to PYTHONPATH if running from cloned repo
+export PYTHONPATH=$(pwd):$PYTHONPATH
 ```
 
 ---
@@ -61,8 +71,8 @@ When using **two USB-to-RS485 adapters** for dual hand control:
 
 1. **Connect each hand to separate USB ports**:
    ```
-   Left Hand  → USB Port 1 → /dev/ttyUSB0 (Linux) or COM3 (Windows)
-   Right Hand → USB Port 2 → /dev/ttyUSB1 (Linux) or COM4 (Windows)
+   Left Hand  → USB Port 2 → /dev/ttyUSB1 (Linux)
+   Right Hand → USB Port 1 → /dev/ttyUSB0 (Linux)
    ```
 
 2. **Identify your USB devices**:
@@ -79,12 +89,12 @@ When using **two USB-to-RS485 adapters** for dual hand control:
 
 3. **Set unique hand IDs** (critical for dual control):
    ```bash
-   # Connect ONLY the left hand first
-   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
+   # Connect ONLY the left hand first (ID=2)
+   python -m xhandlib.ID --port /dev/ttyUSB1 --target 2
    # Power cycle the left hand
    
-   # Connect ONLY the right hand
-   python -m xhandlib.ID --port /dev/ttyUSB1 --target 2  
+   # Connect ONLY the right hand (ID=1)
+   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1  
    # Power cycle the right hand
    ```
 
@@ -129,22 +139,22 @@ device_config = {
 }
 
 # Open device
-if hand.exam_open_device(device_config):
+if hand.open_device(device_config):
     print("✅ Connected successfully!")
     
     # Get device information
-    hand.exam_get_sdk_version()
-    hand.exam_read_device_info()
-    hand.exam_get_hand_type()
+    print("SDK:", hand.get_sdk_version())
+    ok, ver = hand.read_version(hand._hand_id)
+    info = hand.get_info(hand._hand_id)
     
     # Read sensor state
-    hand.exam_read_state(finger_id=5, force_update=True)
+    hand.read_state(hand._hand_id, force_update=True)
     
     # Send preset actions (BE CAREFUL - MOVES THE HAND!)
-    # hand.exam_send_command()  # Send current command
+    # hand.send_command()  # Send current command (dangerous)
     
     # Close connection
-    hand.exam_close_device()
+    hand.close()
 else:
     print("❌ Failed to connect")
 ```
@@ -156,54 +166,36 @@ from xhandlib.xhand import XHandControl
 import time
 
 # Initialize both hands
-left_hand = XHandControl(hand_id=1, position=0.1, mode=3)
-right_hand = XHandControl(hand_id=2, position=0.1, mode=3)
+LEFT_SERIAL_PORT = "/dev/ttyUSB1"  # Left
+RIGHT_SERIAL_PORT = "/dev/ttyUSB0" # Right
+LEFT_ID = 2
+RIGHT_ID = 1
+
+left_hand = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
+right_hand = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=3)
 
 # Device configurations
-left_config = {
-    "protocol": "RS485", 
-    "serial_port": "/dev/ttyUSB0",
-    "baud_rate": 3000000
-}
-
-right_config = {
-    "protocol": "RS485",
-    "serial_port": "/dev/ttyUSB1", 
-    "baud_rate": 3000000
-}
+left_config = {"protocol": "RS485", "serial_port": LEFT_SERIAL_PORT, "baud_rate": 3000000}
+right_config = {"protocol": "RS485", "serial_port": RIGHT_SERIAL_PORT, "baud_rate": 3000000}
 
 # Connect both hands
-left_connected = left_hand.exam_open_device(left_config)
-right_connected = right_hand.exam_open_device(right_config)
+left_connected = left_hand.open_device(left_config)
+right_connected = right_hand.open_device(right_config)
 
 if left_connected and right_connected:
     print("✅ Both hands connected!")
     
     # Synchronize actions
     # WARNING: This will move both hands simultaneously
-    # left_hand.exam_send_command()
-    # right_hand.exam_send_command()
+    # left_hand.send_command()
+    # right_hand.send_command()
     
     # Close both connections
-    left_hand.exam_close_device()
-    right_hand.exam_close_device()
+    left_hand.close()
+    right_hand.close()
 ```
 
-### EtherCAT Connection
-
-```python
-from xhandlib.xhand import XHandControl
-
-hand = XHandControl(hand_id=0)
-
-# EtherCAT configuration
-ethercat_config = {"protocol": "EtherCAT"}
-
-if hand.exam_open_device(ethercat_config):
-    print("✅ EtherCAT connected!")
-    # ... your control code ...
-    hand.exam_close_device()
-```
+<!-- EtherCAT configuration omitted for brevity; focus of this repo is RS-485 usage. -->
 
 ### Advanced Control with Preset Actions
 
@@ -219,7 +211,7 @@ device_config = {
     "baud_rate": 3000000
 }
 
-if hand.exam_open_device(device_config):
+if hand.open_device(device_config):
     # Set hand to position control mode
     hand.set_hand_mode(mode=3)  # 0=powerless, 3=position, 5=powerful
     
@@ -240,10 +232,10 @@ if hand.exam_open_device(device_config):
             hand._hand_command.finger_command[i].position = angles[i] * math.pi / 180
         
         # Send command (BE CAREFUL!)
-        # hand.exam_send_command()
+        # hand.send_command()
         time.sleep(2)  # Hold pose for 2 seconds
     
-    hand.exam_close_device()
+    hand.close()
 ```
 
 ---
@@ -264,39 +256,40 @@ XHandControl(hand_id=0, position=0.1, mode=3)
 
 #### Device Management Methods
 
-| Method | Description | Parameters |
-|--------|-------------|------------|
-| `exam_enumerate_devices(protocol)` | List available ports | `protocol`: "RS485" or "EtherCAT" |
-| `exam_open_device(device_identifier)` | Open device connection | `device_identifier`: Dict with connection params |
-| `exam_close_device()` | Close device connection | None |
-| `exam_list_hands_id()` | List connected hand IDs | None |
+| Method | Description |
+|--------|-------------|
+| `enumerate_devices(protocol)` | List available ports |
+| `open_device(device_identifier)` | Open device connection |
+| `close()` | Close device connection |
+| `list_ids()` | List connected hand IDs |
 
 #### Information Methods
 
-| Method | Description | Returns |
-|--------|-------------|---------|
-| `exam_get_sdk_version()` | Get software SDK version | Prints version |
-| `exam_read_version()` | Get hardware SDK version | Prints version |
-| `exam_read_device_info()` | Get device information | Prints serial, ID, etc. |
-| `exam_get_hand_type()` | Get hand type (left/right) | Prints hand type |
-| `exam_serial_number()` | Get serial number | Prints serial |
-| `exam_get_hand_name()` | Get hand name | Prints name |
-| `exam_set_hand_name(new_name)` | Set hand name | `new_name`: String |
+| Method | Description |
+|--------|-------------|
+| `get_sdk_version()` | Get software SDK version |
+| `read_version(hand_id)` | Get hardware SDK version |
+| `get_info(hand_id)` | Get device information |
+| `get_hand_type(hand_id)` | Get hand type (left/right) |
+| `get_serial_number(hand_id)` | Get serial number |
+| `get_hand_name(hand_id)` | Get hand name |
+| `set_hand_name(hand_id, new_name)` | Set hand name |
 
 #### Control Methods
 
-| Method | Description | Parameters | ⚠️ Warning |
-|--------|-------------|------------|-----------|
-| `exam_send_command()` | Send movement command | None | **MOVES HAND** |
-| `set_hand_mode(mode)` | Set control mode | `mode`: 0/3/5 | **MOVES HAND** |
-| `exam_read_state(finger_id, force_update)` | Read hand state | `finger_id`: 0-11, `force_update`: bool | Safe |
+| Method | Description | ⚠️ Warning |
+|--------|-------------|-----------|
+| `send_command()` | Send prebuilt `_hand_command` | **MOVES HAND** |
+| `send_command(hand_id, HandCommand_t)` | Send explicit command | **MOVES HAND** |
+| `set_hand_mode(mode, hand_id=...)` | Set control mode | **MOVES HAND** |
+| `read_state(hand_id, force_update)` | Read hand state | Safe |
 
 #### Sensor Methods
 
-| Method | Description | Parameters |
-|--------|-------------|------------|
-| `exam_read_state(finger_id=2, force_update=True)` | Read detailed finger state | `finger_id`: Finger to read (2,5,7,9,11 have sensors) |
-| `exam_reset_sensor()` | Reset fingertip sensor | None |
+| Method | Description |
+|--------|-------------|
+| `read_state(hand_id, force_update=True)` | Returns sensor/tactile if available |
+| `reset_sensor(hand_id)` | May be unsupported on some firmware |
 
 ### Device Configuration Examples
 
@@ -347,45 +340,3 @@ device_config = {
    python -m xhandlib.ID --port /dev/ttyUSB1 --target 2
    ```
 
-4. **Windows COM port issues**:
-   - Check Device Manager for COM port numbers
-   - Install USB-to-RS485 drivers if needed
-   - Use `COM3`, `COM4`, etc. (not `/dev/ttyUSB0`)
-
-### Debug Commands
-
-```bash
-# List all hands on all detected ports
-for port in /dev/ttyUSB*; do
-    echo "Checking $port:"
-    python -m xhandlib.ID --port $port --list 2>/dev/null || echo "  No response"
-done
-
-# Test connection with verbose output
-python -c "
-from xhandlib.xhand import XHandControl
-import sys
-hand = XHandControl()
-try:
-    ports = hand.exam_enumerate_devices('RS485')
-    print('Available ports:', ports)
-except Exception as e:
-    print('Error:', e)
-"
-```
-
----
-
-## ⚠️ Safety Notes
-
-- **Always test with small movements first**
-- **Keep emergency stop accessible**
-- **Power-cycle hands after ID changes**
-- **Use `mode=0` (powerless) for safe testing**
-- **Verify hand IDs before dual-hand operations**
-
----
-
-## 📝 License
-
-This project is provided as-is for educational and research purposes. Please refer to the XHAND SDK license terms for commercial usage.

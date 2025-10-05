@@ -10,7 +10,7 @@ from xhand_controller import xhand_control as xc
 
 DEFAULT_BAUD = 3_000_000
 
-class XHandBus:
+class XHandControl:
     """
     Comprehensive wrapper around the vendor SDK for RS-485 and EtherCAT use.
     
@@ -18,18 +18,34 @@ class XHandBus:
     backward compatibility with existing code.
     """
 
-    def __init__(self, port: str = None, baud: int = DEFAULT_BAUD):
+    def __init__(self, hand_id: int = 0, position: float = 0.1, mode: int = 3,
+                 port: str = None, baud: int = DEFAULT_BAUD):
         """
-        Initialize XHandBus.
-        
+        Initialize controller wrapper compatible with example.py and SDK.
+
         Args:
-            port (str, optional): Serial port for RS485. If None, use for EtherCAT.
-            baud (int): Baud rate for RS485 communication.
+            hand_id (int): Default hand ID for commands.
+            position (float): Default finger position [0.0, 1.0].
+            mode (int): Default control mode (0 powerless, 3 position, 5 powerful).
+            port (str, optional): RS485 serial port; if None, EtherCAT assumed when opened.
+            baud (int): RS485 baud rate.
         """
+        self._hand_id = hand_id
         self.port = port
         self.baud = baud
         self.dev: Optional[xc.XHandControl] = None
         self.protocol = "RS485" if port else "EtherCAT"
+
+        # Pre-build a default HandCommand_t mimicking SDK example expectations
+        self._hand_command = xc.HandCommand_t()
+        for i in range(12):
+            self._hand_command.finger_command[i].id = i
+            self._hand_command.finger_command[i].kp = 100
+            self._hand_command.finger_command[i].ki = 0
+            self._hand_command.finger_command[i].kd = 0
+            self._hand_command.finger_command[i].position = position
+            self._hand_command.finger_command[i].tor_max = 300
+            self._hand_command.finger_command[i].mode = mode
 
     def open(self) -> None:
         """Open device connection (RS485 mode for backward compatibility)."""
@@ -57,6 +73,8 @@ class XHandBus:
         Returns:
             List[str]: Available device ports
         """
+        if self.dev is None:
+            self.dev = xc.XHandControl()
         return self.dev.enumerate_devices(protocol)
 
     def open_device(self, device_identifier: Dict[str, Any]) -> bool:
@@ -98,6 +116,8 @@ class XHandBus:
             self.baud = device_identifier["baud_rate"]
             
         return True
+
+    # Note: clean API is already provided above (enumerate_devices, open_device, close, etc.)
 
     # ---------- discovery ----------
     def list_ids(self) -> List[int]:
@@ -215,23 +235,15 @@ class XHandBus:
         if err.error_code != 0:
             raise RuntimeError(f"send_command failed (id={hand_id}): {err.error_message}")
 
-    def set_hand_mode(self, hand_id: int, mode: int, position: float = 0.5, 
-                      kp: int = 120, ki: int = 0, kd: int = 0, tor_max: int = 380) -> bool:
+    def set_hand_mode(self, mode: int = None, *, hand_id: Optional[int] = None,
+                      position: float = 0.5, kp: int = 120, ki: int = 0, kd: int = 0, tor_max: int = 380) -> bool:
         """
-        Set hand activity mode.
-        
-        Args:
-            hand_id (int): Hand ID
-            mode (int): Hand mode (0: powerless, 3: position, 5: powerful)
-            position (float): Default position (0.0-1.0)
-            kp (int): Proportional gain
-            ki (int): Integral gain  
-            kd (int): Derivative gain
-            tor_max (int): Maximum torque
-            
-        Returns:
-            bool: True if successful
+        Set hand activity mode. Compatible with example.py call style (set_hand_mode(mode=3))
+        and with explicit hand selection via hand_id.
         """
+        target_hand_id = self._hand_id if hand_id is None else hand_id
+        if mode is None:
+            raise ValueError("mode must be provided")
         hand_mode = xc.HandCommand_t()
         for i in range(12):
             hand_mode.finger_command[i].id = i
@@ -241,9 +253,11 @@ class XHandBus:
             hand_mode.finger_command[i].position = position
             hand_mode.finger_command[i].tor_max = tor_max
             hand_mode.finger_command[i].mode = mode
-        
-        error_struct = self.dev.send_command(hand_id, hand_mode)
+        error_struct = self.dev.send_command(target_hand_id, hand_mode)
         return error_struct.error_code == 0
+
+    def send_command(self):
+        return self.dev.send_command(self._hand_id, self._hand_command)
 
     # ---------- state ----------
     def read_state(self, hand_id: int, force_update: bool = False):
