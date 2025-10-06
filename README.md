@@ -73,169 +73,15 @@ When using **two USB-to-RS485 adapters** for dual hand control:
 1. **Connect each hand to separate USB ports**:
    ```
    Left Hand  → USB Port 1 → /dev/ttyUSB0 (Linux)
-   Right Hand → USB Port 2 → /dev/ttyUSB1 (Linux)
-   ```
 
-2. **Identify your USB devices**:
-   ```bash
-   # Linux - List all USB serial devices
-   ls /dev/ttyUSB*
-   
-   # Check device details
-   dmesg | grep ttyUSB
-   
-   # Windows - Check Device Manager or use PowerShell
-   Get-WmiObject -Class Win32_SerialPort | Select-Object Name, DeviceID
-   ```
-
-3. **Set unique hand IDs each time after power-on** (IDs don't persist):
-   ```bash
-   # Connect ONLY the left hand first (ID=1)
    python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
-   # Don't power cycle, just proceed
+
+   Then put righthand
    ```
-
-### Device ID Management
-
-The `xhandlib/ID.py` tool helps manage hand IDs:
-
-```bash
-# List all hands on a specific port
-python -m xhandlib.ID --port /dev/ttyUSB0 --list
-
-# Auto-assign ID to single connected hand
-python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
-
-# Manual ID change (if you know current ID)
-python -m xhandlib.ID --port /dev/ttyUSB0 --old 0 --new 1
-
-# For Windows, use COM ports:
-python -m xhandlib.ID --port COM3 --target 1
-```
 
 **Important**: IDs do NOT persist after power cycling. You must set IDs each time you power on the hands. Do NOT power-cycle after setting IDs - they are active immediately.
 
----
 
-## 🚀 Usage Examples
-
-### Basic Single Hand Control
-
-```python
-from xhandlib.xhand import XHandControl
-import time
-
-# Initialize hand controller
-hand = XHandControl(hand_id=1, position=0.1, mode=3)
-
-# Setup device connection
-device_config = {
-    "protocol": "RS485",
-    "serial_port": "/dev/ttyUSB0",  # or "COM3" on Windows
-    "baud_rate": 3000000
-}
-
-# Open device
-if hand.open_device(device_config):
-    print("✅ Connected successfully!")
-    
-    # Get device information
-    print("SDK:", hand.get_sdk_version())
-    ok, ver = hand.read_version(hand._hand_id)
-    info = hand.get_info(hand._hand_id)
-    
-    # Read sensor state
-    hand.read_state(hand._hand_id, force_update=True)
-    
-    # Send preset actions (BE CAREFUL - MOVES THE HAND!)
-    # hand.send_command()  # Send current command (dangerous)
-    
-    # Close connection
-    hand.close()
-else:
-    print("❌ Failed to connect")
-```
-
-### Dual Hand Control Setup
-
-```python
-from xhandlib.xhand import XHandControl
-import time
-
-# Initialize both hands
-LEFT_SERIAL_PORT = "/dev/ttyUSB0"  # Left
-RIGHT_SERIAL_PORT = "/dev/ttyUSB1" # Right
-LEFT_ID = 1
-RIGHT_ID = 0
-
-left_hand = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
-right_hand = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=3)
-
-# Device configurations
-left_config = {"protocol": "RS485", "serial_port": LEFT_SERIAL_PORT, "baud_rate": 3000000}
-right_config = {"protocol": "RS485", "serial_port": RIGHT_SERIAL_PORT, "baud_rate": 3000000}
-
-# Connect both hands
-left_connected = left_hand.open_device(left_config)
-right_connected = right_hand.open_device(right_config)
-
-if left_connected and right_connected:
-    print("✅ Both hands connected!")
-    
-    # Synchronize actions
-    # WARNING: This will move both hands simultaneously
-    # left_hand.send_command()
-    # right_hand.send_command()
-    
-    # Close both connections
-    left_hand.close()
-    right_hand.close()
-```
-
-<!-- EtherCAT configuration omitted for brevity; focus of this repo is RS-485 usage. -->
-
-### Advanced Control with Preset Actions
-
-```python
-from xhandlib.xhand import XHandControl
-import time
-import math
-
-hand = XHandControl(hand_id=1)
-device_config = {
-    "protocol": "RS485",
-    "serial_port": "/dev/ttyUSB0",
-    "baud_rate": 3000000
-}
-
-if hand.open_device(device_config):
-    # Set hand to position control mode
-    hand.set_hand_mode(mode=3)  # 0=powerless, 3=position, 5=powerful
-    
-    # Define preset actions (angles in degrees)
-    actions = {
-        'fist': [11.85, 74.58, 40, -3.08, 106.02, 110, 109.75, 107.56, 107.66, 110, 109.1, 109.15],
-        'palm': [0, 80.66, 33.2, 0.00, 5.11, 0, 6.53, 0, 6.76, 4.41, 10.13, 0],
-        'v': [38.32, 90, 52.08, 6.21, 2.6, 0, 2.1, 0, 110, 110, 110, 109.23],
-        'ok': [45.88, 41.54, 67.35, 2.22, 80.45, 70.82, 31.37, 10.39, 13.69, 16.88, 1.39, 10.55]
-    }
-    
-    # Execute action sequence
-    for action_name, angles in actions.items():
-        print(f"Executing: {action_name}")
-        
-        # Convert degrees to radians and set positions
-        for i in range(12):
-            hand._hand_command.finger_command[i].position = angles[i] * math.pi / 180
-        
-        # Send command (BE CAREFUL!)
-        # hand.send_command()
-        time.sleep(2)  # Hold pose for 2 seconds
-    
-    hand.close()
-```
-
----
 
 ## 📋 API Reference
 
@@ -274,7 +120,7 @@ XHandControl(hand_id=0, position=0.1, mode=3)
 
 #### Control Methods
 
-| Method | Description | ⚠️ Warning |
+| Method | Description | Warning |
 |--------|-------------|-----------|
 | `send_command()` | Send prebuilt `_hand_command` | **MOVES HAND** |
 | `send_command(hand_id, HandCommand_t)` | Send explicit command | **MOVES HAND** |
@@ -299,42 +145,3 @@ device_config = {
     "baud_rate": 3000000
 }
 ```
-
-#### EtherCAT Configuration
-```python
-device_config = {
-    "protocol": "EtherCAT"
-}
-```
-
----
-
-## 🔧 Troubleshooting
-
-### Common Issues
-
-1. **"Permission denied" on Linux**:
-   ```bash
-   sudo usermod -a -G dialout $USER
-   # Logout and login again
-   ```
-
-2. **Device not found**:
-   ```bash
-   # Check USB connections
-   lsusb
-   ls /dev/ttyUSB*
-   
-   # Try different baud rates
-   python -m xhandlib.ID --port /dev/ttyUSB0 --baud 115200 --list
-   ```
-
-3. **Set IDs after every power cycle**:
-   ```bash
-   # Connect ONE hand at a time and set unique IDs (no power cycle needed!)
-   # Left hand first
-   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
-   # Then right hand
-   python -m xhandlib.ID --port /dev/ttyUSB1 --target 0
-   ```
-
