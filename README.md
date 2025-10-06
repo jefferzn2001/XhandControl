@@ -17,8 +17,9 @@ Tested on **Ubuntu 22.04** and **Windows 10/11** with **Python 3.10+**.
   - `encoder.py` (mode=0) live joint angles GUI (degrees)
   - `tactile.py` (mode=0) live tactile GUI (5 fingers per hand)
 - Standard mapping used across scripts:
-  - Left hand: `/dev/ttyUSB1`, ID=2
-  - Right hand: `/dev/ttyUSB0`, ID=1
+  - Left hand: `/dev/ttyUSB0`, ID=1
+  - Right hand: `/dev/ttyUSB1`, ID=0
+- **Note**: IDs don't persist after power cycle. Set manually each time using `xhandlib/ID.py`
 - After installing the SDK wheel, you can delete the `xhand_control_sdk_py/` folder.
 
 ---
@@ -71,8 +72,8 @@ When using **two USB-to-RS485 adapters** for dual hand control:
 
 1. **Connect each hand to separate USB ports**:
    ```
-   Left Hand  → USB Port 2 → /dev/ttyUSB1 (Linux)
-   Right Hand → USB Port 1 → /dev/ttyUSB0 (Linux)
+   Left Hand  → USB Port 1 → /dev/ttyUSB0 (Linux)
+   Right Hand → USB Port 2 → /dev/ttyUSB1 (Linux)
    ```
 
 2. **Identify your USB devices**:
@@ -87,15 +88,11 @@ When using **two USB-to-RS485 adapters** for dual hand control:
    Get-WmiObject -Class Win32_SerialPort | Select-Object Name, DeviceID
    ```
 
-3. **Set unique hand IDs** (critical for dual control):
+3. **Set unique hand IDs each time after power-on** (IDs don't persist):
    ```bash
-   # Connect ONLY the left hand first (ID=2)
-   python -m xhandlib.ID --port /dev/ttyUSB1 --target 2
-   # Power cycle the left hand
-   
-   # Connect ONLY the right hand (ID=1)
-   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1  
-   # Power cycle the right hand
+   # Connect ONLY the left hand first (ID=1)
+   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
+   # Don't power cycle, just proceed
    ```
 
 ### Device ID Management
@@ -116,7 +113,7 @@ python -m xhandlib.ID --port /dev/ttyUSB0 --old 0 --new 1
 python -m xhandlib.ID --port COM3 --target 1
 ```
 
-**Important**: Always power-cycle the hand after changing its ID to persist the change.
+**Important**: IDs do NOT persist after power cycling. You must set IDs each time you power on the hands. Do NOT power-cycle after setting IDs - they are active immediately.
 
 ---
 
@@ -166,10 +163,10 @@ from xhandlib.xhand import XHandControl
 import time
 
 # Initialize both hands
-LEFT_SERIAL_PORT = "/dev/ttyUSB1"  # Left
-RIGHT_SERIAL_PORT = "/dev/ttyUSB0" # Right
-LEFT_ID = 2
-RIGHT_ID = 1
+LEFT_SERIAL_PORT = "/dev/ttyUSB0"  # Left
+RIGHT_SERIAL_PORT = "/dev/ttyUSB1" # Right
+LEFT_ID = 1
+RIGHT_ID = 0
 
 left_hand = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
 right_hand = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=3)
@@ -332,11 +329,12 @@ device_config = {
    python -m xhandlib.ID --port /dev/ttyUSB0 --baud 115200 --list
    ```
 
-3. **Multiple hands with same ID**:
+3. **Set IDs after every power cycle**:
    ```bash
-   # Connect ONE hand at a time and set unique IDs
+   # Connect ONE hand at a time and set unique IDs (no power cycle needed!)
+   # Left hand first
    python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
-   # Power cycle, then connect second hand
-   python -m xhandlib.ID --port /dev/ttyUSB1 --target 2
+   # Then right hand
+   python -m xhandlib.ID --port /dev/ttyUSB1 --target 0
    ```
 

@@ -21,7 +21,9 @@ PRESET_POSES = {
     'palm': [0, 80.66, 33.2, 0.00, 5.11, 0, 6.53, 0, 6.76, 4.41, 10.13, 0],
     'fist': [11.85, 74.58, 40, -3.08, 106.02, 110, 109.75, 107.56, 107.66, 105, 90.0, 109.15],
     'v': [38.32, 90, 52.08, 6.21, 2.6, 0, 2.1, 0, 110, 110, 110, 109.23],
-    'ok': [45.88, 41.54, 67.35, 2.22, 80.45, 70.82, 31.37, 10.39, 13.69, 16.88, 1.39, 10.55]
+    'ok': [45.88, 41.54, 67.35, 2.22, 80.45, 70.82, 31.37, 10.39, 13.69, 16.88, 1.39, 10.55],
+    'point': [20, 63, 97, 2, -0.7, 0.2, 109, 107, 103, 110, 97.5, 110],
+    'rock': [19, 54, 102, 2, 5.2, 0.2, 110, 95, 109, 101.7, 10.3, 10]
 }
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -225,7 +227,7 @@ def get_preset_pose_radians(pose_name: str) -> List[float]:
     Get a preset pose in radians for Isaac Sim.
     
     Args:
-        pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok')
+        pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok', 'point', 'rock')
         
     Returns:
         List[float]: 12 joint angles in radians
@@ -242,7 +244,7 @@ def get_preset_pose_degrees(pose_name: str) -> List[float]:
     Get a preset pose in degrees for real hardware.
     
     Args:
-        pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok')
+        pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok', 'point', 'rock')
         
     Returns:
         List[float]: 12 joint angles in degrees
@@ -330,7 +332,7 @@ class XHandSimCommand:
         Set a preset pose.
         
         Args:
-            pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok')
+            pose_name (str): Name of preset ('palm', 'fist', 'v', 'ok', 'point', 'rock')
             
         Returns:
             Dict[str, float]: Joint position dict for Isaac Lab

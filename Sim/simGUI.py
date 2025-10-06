@@ -19,6 +19,7 @@ This script provides real-time sliders for each joint to help you:
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import os
 from isaaclab.app import AppLauncher
 
 # Create argparser
@@ -30,6 +31,20 @@ app_launcher = AppLauncher(args_cli)
 simulation_app = app_launcher.app
 
 """Rest everything follows."""
+
+# Get the project root directory (parent of Sim/)
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+print(f"[DEBUG] Project root: {PROJECT_ROOT}")
+print(f"[DEBUG] Left URDF path: {os.path.join(PROJECT_ROOT, 'xhandurdf/xhand_left/urdf/xhand_left_isaac.urdf')}")
+print(f"[DEBUG] Right URDF path: {os.path.join(PROJECT_ROOT, 'xhandurdf/xhand_right/urdf/xhand_right_isaac.urdf')}")
+print(f"[DEBUG] Left URDF exists: {os.path.exists(os.path.join(PROJECT_ROOT, 'xhandurdf/xhand_left/urdf/xhand_left_isaac.urdf'))}")
+print(f"[DEBUG] Right URDF exists: {os.path.exists(os.path.join(PROJECT_ROOT, 'xhandurdf/xhand_right/urdf/xhand_right_isaac.urdf'))}")
+
+# Add project root to Python path for xhandlib imports
+import sys
+if PROJECT_ROOT not in sys.path:
+    sys.path.insert(0, PROJECT_ROOT)
+print(f"[DEBUG] Added to Python path: {PROJECT_ROOT}")
 
 import torch
 import numpy as np
@@ -63,7 +78,7 @@ class JointDriveCfg:
 # XHAND Configuration (same as sim.py but with zero initial pose)
 XHAND_LEFT_CONFIG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
-        asset_path="xhandurdf/xhand_left/urdf/xhand_left_isaac.urdf",
+        asset_path=os.path.join(PROJECT_ROOT, "xhandurdf/xhand_left/urdf/xhand_left_isaac.urdf"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             max_depenetration_velocity=1.0,
@@ -103,7 +118,7 @@ XHAND_LEFT_CONFIG = ArticulationCfg(
 # Same for right hand
 XHAND_RIGHT_CONFIG = ArticulationCfg(
     spawn=sim_utils.UrdfFileCfg(
-        asset_path="xhandurdf/xhand_right/urdf/xhand_right_isaac.urdf",
+        asset_path=os.path.join(PROJECT_ROOT, "xhandurdf/xhand_right/urdf/xhand_right_isaac.urdf"),
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             max_depenetration_velocity=1.0,

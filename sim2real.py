@@ -15,8 +15,8 @@ Features:
     - Same joint mapping as sim_tune.py
 
 Hardware Setup:
-    - Left hand: /dev/ttyUSB1, ID=2
-    - Right hand: /dev/ttyUSB0, ID=1
+    - Left hand: /dev/ttyUSB0, ID=1
+    - Right hand: /dev/ttyUSB1, ID=0
     - Mode 3 (position control)
 
 """
@@ -54,10 +54,17 @@ from xhandlib.isaacsim_utils import PRESET_POSES, hardware_to_urdf_order
 
 
 # Joint drive configuration (same as sim_tune.py)
+# ═══════════════════════════════════════════════════════════════════════════
+# 🎯 TUNING PARAMETERS - Adjust these to match real robot behavior:
+# - stiffness (kp): Controls position tracking stiffness (default: 1000.0)
+#   Higher = stiffer/faster response, Lower = softer/slower response
+# - damping (kd): Controls velocity damping (default: 100.0)
+#   Higher = more damped/stable, Lower = less damped/oscillatory
+# ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class JointDriveGainsCfg:
-    stiffness: float = 1000.0
-    damping: float = 100.0
+    stiffness: float = 1000.0  # kp gain - tune for position tracking
+    damping: float = 100.0      # kd gain - tune for velocity damping
 
 @dataclass  
 class JointDriveCfg:
@@ -79,11 +86,14 @@ XHAND_LEFT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=2000.0, damping=200.0,
-            effort_limit_sim=100.0, velocity_limit_sim=100.0,
+            joint_names_expr=[".*"], 
+            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
+            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            effort_limit_sim=100.0, 
+            velocity_limit_sim=300.0,
         ),
     },
 )
@@ -99,11 +109,14 @@ XHAND_RIGHT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=2000.0, damping=200.0,
-            effort_limit_sim=100.0, velocity_limit_sim=100.0,
+            joint_names_expr=[".*"], 
+            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
+            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            effort_limit_sim=100.0, 
+            velocity_limit_sim=300.0,
         ),
     },
 )
@@ -134,30 +147,29 @@ class Sim2RealGUI:
         
         # Joint info (hardware order)
         self.joint_info = [
-            ("HW J0: Thumb Yaw", 0.0, 1.57, "thumb_yaw"),
-            ("HW J1: Thumb MCP", -1.05, 1.57, "thumb_mcp"),
-            ("HW J2: Thumb IP", 0.0, 1.57, "thumb_ip"),
-            ("HW J3: Index Yaw", -0.09, 0.30, "index_yaw"),
-            ("HW J4: Index MCP", 0.0, 1.92, "index_mcp"),
-            ("HW J5: Index PIP", 0.0, 1.92, "index_pip"),
-            ("HW J6: Middle MCP", 0.0, 1.92, "mid_mcp"),
-            ("HW J7: Middle PIP", 0.0, 1.92, "mid_pip"),
-            ("HW J8: Ring MCP", 0.0, 1.92, "ring_mcp"),
-            ("HW J9: Ring PIP", 0.0, 1.92, "ring_pip"),
-            ("HW J10: Pinky MCP", 0.0, 1.92, "pinky_mcp"),
-            ("HW J11: Pinky PIP", 0.0, 1.92, "pinky_pip"),
+            ("J0", 0.0, 1.57, "thumb_yaw"),
+            ("J1", -1.05, 1.57, "thumb_mcp"),
+            ("J2", 0.0, 1.57, "thumb_ip"),
+            ("J3", -0.09, 0.30, "index_yaw"),
+            ("J4", 0.0, 1.92, "index_mcp"),
+            ("J5", 0.0, 1.92, "index_pip"),
+            ("J6", 0.0, 1.92, "mid_mcp"),
+            ("J7", 0.0, 1.92, "mid_pip"),
+            ("J8", 0.0, 1.92, "ring_mcp"),
+            ("J9", 0.0, 1.92, "ring_pip"),
+            ("J10", 0.0, 1.92, "pinky_mcp"),
+            ("J11", 0.0, 1.92, "pinky_pip"),
         ]
         
         self._build_ui()
     
     def _build_ui(self):
         """Build the UI window with sliders."""
-        self.ui_window = ui.Window("XHAND Sim2Real Controller", width=450, height=850)
+        self.ui_window = ui.Window("XHAND Sim2Real Controller", width=400, height=800)
         
         with self.ui_window.frame:
             with ui.VStack(spacing=5):
                 ui.Label("XHAND Sim2Real Control", height=35, alignment=ui.Alignment.CENTER)
-                ui.Label("⚠️ CAUTION: Sliders control REAL robots!", height=25, alignment=ui.Alignment.CENTER)
                 ui.Separator()
                 
                 # Create slider for each joint
@@ -166,7 +178,7 @@ class Sim2RealGUI:
                 
                 for idx, (name, min_val, max_val, _) in enumerate(self.joint_info):
                     with ui.HStack(height=55):
-                        ui.Label(name, width=140)
+                        ui.Label(name, width=60)
                         
                         with ui.VStack(spacing=2):
                             slider = ui.FloatSlider(min=min_val, max=max_val, height=22)
@@ -181,13 +193,17 @@ class Sim2RealGUI:
                 ui.Separator()
                 
                 # Preset buttons
-                ui.Label("Preset Poses (⚠️ Moves Real Robots!):", height=22)
+                ui.Label("Preset Poses:", height=22)
                 with ui.HStack(height=35, spacing=5):
-                    ui.Button("Fist", clicked_fn=lambda: self._load_preset('fist'), width=70)
-                    ui.Button("Palm", clicked_fn=lambda: self._load_preset('palm'), width=70)
-                    ui.Button("V", clicked_fn=lambda: self._load_preset('v'), width=70)
-                    ui.Button("OK", clicked_fn=lambda: self._load_preset('ok'), width=70)
-                    ui.Button("Reset", clicked_fn=lambda: self._reset_joints(), width=70)
+                    ui.Button("Fist", clicked_fn=lambda: self._load_preset('fist'), width=60)
+                    ui.Button("Palm", clicked_fn=lambda: self._load_preset('palm'), width=60)
+                    ui.Button("V", clicked_fn=lambda: self._load_preset('v'), width=60)
+                with ui.HStack(height=35, spacing=5):
+                    ui.Button("OK", clicked_fn=lambda: self._load_preset('ok'), width=60)
+                    ui.Button("Point", clicked_fn=lambda: self._load_preset('point'), width=60)
+                    ui.Button("Rock", clicked_fn=lambda: self._load_preset('rock'), width=60)
+                with ui.HStack(height=35, spacing=5):
+                    ui.Button("Reset", clicked_fn=lambda: self._reset_joints(), width=60)
     
     def _on_slider_changed(self, joint_idx, value):
         """Called when a slider value changes."""
@@ -231,7 +247,6 @@ def run_sim2real(sim: sim_utils.SimulationContext, scene: InteractiveScene, gui:
     
     print("[INFO]: ═══════════════════════════════════════════════════")
     print("[INFO]: Sim2Real Mode Active")
-    print("[INFO]: ⚠️  SLIDERS CONTROL REAL ROBOTS - BE CAREFUL!")
     print("[INFO]: ═══════════════════════════════════════════════════")
     
     while simulation_app.is_running():
@@ -269,10 +284,10 @@ def main():
     """Main function."""
     
     # ========== Connect Real Robots ==========
-    LEFT_SERIAL_PORT = "/dev/ttyUSB1"
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB0"
-    LEFT_ID = 2
-    RIGHT_ID = 1
+    LEFT_SERIAL_PORT = "/dev/ttyUSB0"
+    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
+    LEFT_ID = 1
+    RIGHT_ID = 0
     
     print("[INFO]: Connecting to real robots...")
     xhand_left = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)

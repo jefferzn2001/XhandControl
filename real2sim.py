@@ -15,8 +15,8 @@ Features:
     - Perfect for teleoperation and demonstration recording
 
 Hardware Setup:
-    - Left hand: /dev/ttyUSB1, ID=2 (MODE 0 - Powerless for manual movement)
-    - Right hand: /dev/ttyUSB0, ID=1 (MODE 0 - Powerless for manual movement)
+    - Left hand: /dev/ttyUSB0, ID=1 (MODE 0 - Powerless for manual movement)
+    - Right hand: /dev/ttyUSB1, ID=0 (MODE 0 - Powerless for manual movement)
 
 """
 
@@ -55,10 +55,17 @@ from xhandlib.isaacsim_utils import hardware_to_urdf_order
 
 
 # Joint drive configuration
+# ═══════════════════════════════════════════════════════════════════════════
+# 🎯 TUNING PARAMETERS - Adjust these to match real robot behavior:
+# - stiffness (kp): Controls position tracking stiffness (default: 1000.0)
+#   Higher = stiffer/faster response, Lower = softer/slower response
+# - damping (kd): Controls velocity damping (default: 100.0)
+#   Higher = more damped/stable, Lower = less damped/oscillatory
+# ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class JointDriveGainsCfg:
-    stiffness: float = 1000.0
-    damping: float = 100.0
+    stiffness: float = 1000.0  # kp gain - tune for position tracking
+    damping: float = 100.0      # kd gain - tune for velocity damping
 
 @dataclass  
 class JointDriveCfg:
@@ -80,11 +87,14 @@ XHAND_LEFT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=2000.0, damping=200.0,
-            effort_limit_sim=100.0, velocity_limit_sim=100.0,
+            joint_names_expr=[".*"], 
+            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
+            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            effort_limit_sim=100.0, 
+            velocity_limit_sim=300.0,
         ),
     },
 )
@@ -100,11 +110,14 @@ XHAND_RIGHT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
-            joint_names_expr=[".*"], stiffness=2000.0, damping=200.0,
-            effort_limit_sim=100.0, velocity_limit_sim=100.0,
+            joint_names_expr=[".*"], 
+            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
+            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            effort_limit_sim=100.0, 
+            velocity_limit_sim=300.0,
         ),
     },
 )
@@ -135,22 +148,21 @@ class Real2SimMonitor:
         
         with self.ui_window.frame:
             with ui.VStack(spacing=5):
-                ui.Label("XHAND Real2Sim Teleoperation", height=35, alignment=ui.Alignment.CENTER)
-                ui.Label("Manually move real robots - sim mirrors movements", height=25)
+                ui.Label("XHAND Real2Sim Monitor", height=35, alignment=ui.Alignment.CENTER)
                 ui.Separator()
                 
-                ui.Label("Left Hand Encoder (degrees):", height=20)
+                ui.Label("Left Hand:", height=20)
                 self.left_label = ui.Label("Not updated yet...", height=60, word_wrap=True)
                 
                 ui.Separator()
                 
-                ui.Label("Right Hand Encoder (degrees):", height=20)
+                ui.Label("Right Hand:", height=20)
                 self.right_label = ui.Label("Not updated yet...", height=60, word_wrap=True)
                 
                 ui.Separator()
                 
                 ui.Label("Status:", height=20)
-                self.status_label = ui.Label("Running...", height=30)
+                self.status_label = ui.Label("Running", height=30)
     
     def update_display(self, left_deg, right_deg):
         """Update the display with current encoder values."""
@@ -174,7 +186,6 @@ def run_real2sim(sim: sim_utils.SimulationContext, scene: InteractiveScene, moni
     
     print("[INFO]: ═══════════════════════════════════════════════════")
     print("[INFO]: Real2Sim Teleoperation Active")
-    print("[INFO]: Manually move the real robots!")
     print("[INFO]: Simulation will mirror your movements")
     print("[INFO]: Update rate: ~{}Hz".format(args_cli.update_rate))
     print("[INFO]: ═══════════════════════════════════════════════════")
@@ -241,10 +252,10 @@ def main():
     """Main function."""
     
     # ========== Connect Real Robots (Mode 0 - Powerless) ==========
-    LEFT_SERIAL_PORT = "/dev/ttyUSB1"
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB0"
-    LEFT_ID = 2
-    RIGHT_ID = 1
+    LEFT_SERIAL_PORT = "/dev/ttyUSB0"
+    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
+    LEFT_ID = 1
+    RIGHT_ID = 0
     
     print("[INFO]: Connecting to real robots in ENCODER mode (powerless)...")
     xhand_left = XHandControl(hand_id=LEFT_ID, position=0.1, mode=0)  # Mode 0 = powerless
@@ -261,9 +272,7 @@ def main():
         print("[ERROR]: Failed to connect to right hand")
         xhand_left.close()
         sys.exit(1)
-    
-    print("[INFO]: ✓ Real robots connected in encoder mode")
-    print("[INFO]: You can now manually move the robots!")
+
     
     try:
         # ========== Initialize Simulation ==========
@@ -290,7 +299,7 @@ def main():
         print("[INFO]: Closing real robot connections...")
         xhand_left.close()
         xhand_right.close()
-        print("[INFO]: ✓ Disconnected")
+
 
 
 if __name__ == "__main__":

@@ -1,8 +1,8 @@
 # tactile.py
 # Live tactile visualization for XHAND (left/right), 5 rows of (Left heatmap | bar | Right heatmap).
 # Assumes:
-#   - Left hand:  /dev/ttyUSB1, hand_id=2
-#   - Right hand: /dev/ttyUSB0, hand_id=1
+#   - Left hand:  /dev/ttyUSB0, hand_id=1
+#   - Right hand: /dev/ttyUSB1, hand_id=0
 # Requires: matplotlib, numpy
 
 from xhandlib.xhand import XHandControl
@@ -18,10 +18,10 @@ import matplotlib.gridspec as gridspec
 # --------------------------
 # Config
 # --------------------------
-LEFT_SERIAL_PORT = "/dev/ttyUSB1"
-RIGHT_SERIAL_PORT = "/dev/ttyUSB0"
-LEFT_ID = 2
-RIGHT_ID = 1
+LEFT_SERIAL_PORT = "/dev/ttyUSB0"
+RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
+LEFT_ID = 1
+RIGHT_ID = 0
 BAUD = 3_000_000
 UPDATE_HZ = 25.0  # plotting rate
 FORCE_VMAX_MIN = 10.0  # lower bound for colormap vmax

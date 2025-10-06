@@ -6,10 +6,10 @@ import sys
 
 if __name__ == "__main__":
     # Unified naming and mapping (same as encoder.py and tactile.py)
-    LEFT_SERIAL_PORT = "/dev/ttyUSB1"   # Left hand on USB1
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB0"  # Right hand on USB0
-    LEFT_ID = 2
-    RIGHT_ID = 1
+    LEFT_SERIAL_PORT = "/dev/ttyUSB0"   # Left hand on USB0
+    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"  # Right hand on USB1
+    LEFT_ID = 1
+    RIGHT_ID = 0
 
     # Initialize left and right hands; keep mode fixed to 3 for demo
     xhand_l = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
