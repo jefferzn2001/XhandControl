@@ -49,22 +49,14 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from dataclasses import dataclass, field
 
 # Import XHAND hardware controller
-from xhandlib.xhand import XHandControl
+from xhandlib.xhand import XHandControl, get_device_configs
 from xhandlib.isaacsim_utils import PRESET_POSES, hardware_to_urdf_order
 
 
-# Joint drive configuration (same as sim_tune.py)
-# ═══════════════════════════════════════════════════════════════════════════
-# 🎯 TUNING PARAMETERS - Adjust these to match real robot behavior:
-# - stiffness (kp): Controls position tracking stiffness (default: 1000.0)
-#   Higher = stiffer/faster response, Lower = softer/slower response
-# - damping (kd): Controls velocity damping (default: 100.0)
-#   Higher = more damped/stable, Lower = less damped/oscillatory
-# ═══════════════════════════════════════════════════════════════════════════
 @dataclass
 class JointDriveGainsCfg:
-    stiffness: float = 1000.0  # kp gain - tune for position tracking
-    damping: float = 100.0      # kd gain - tune for velocity damping
+    stiffness: float = 170.0  
+    damping: float = 10.0     
 
 @dataclass  
 class JointDriveCfg:
@@ -86,12 +78,12 @@ XHAND_LEFT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, 0.15, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
             joint_names_expr=[".*"], 
-            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
-            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            stiffness=170.0,  
+            damping=10.0,     
             effort_limit_sim=100.0, 
             velocity_limit_sim=300.0,
         ),
@@ -109,12 +101,12 @@ XHAND_RIGHT_CONFIG = ArticulationCfg(
         fix_base=True,
         joint_drive=JointDriveCfg(),
     ),
-    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.20, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
+    init_state=ArticulationCfg.InitialStateCfg(pos=(0.0, -0.15, 1.05), rot=(0.0, 0.0, 0.0, 1.0)),
     actuators={
         "all_joints": ImplicitActuatorCfg(
             joint_names_expr=[".*"], 
-            stiffness=3000.0,  # 🎯 TUNE: Actuator stiffness (kp) - increase for faster response
-            damping=200.0,     # 🎯 TUNE: Actuator damping (kd) - increase for more stability
+            stiffness=170.0, 
+            damping=10.0,    
             effort_limit_sim=100.0, 
             velocity_limit_sim=300.0,
         ),
@@ -284,17 +276,18 @@ def main():
     """Main function."""
     
     # ========== Connect Real Robots ==========
-    LEFT_SERIAL_PORT = "/dev/ttyUSB0"
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
-    LEFT_ID = 1
-    RIGHT_ID = 0
+    print("Auto-detecting USB devices...")
+    try:
+        left_config, right_config = get_device_configs()
+        print(f"Left hand:  {left_config['serial_port']}")
+        print(f"Right hand: {right_config['serial_port']}")
+    except Exception as e:
+        print(f"Error detecting devices: {e}")
+        sys.exit(1)
     
     print("[INFO]: Connecting to real robots...")
-    xhand_left = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
-    xhand_right = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=3)
-    
-    left_config = {"protocol": "RS485", "serial_port": LEFT_SERIAL_PORT, "baud_rate": 3000000}
-    right_config = {"protocol": "RS485", "serial_port": RIGHT_SERIAL_PORT, "baud_rate": 3000000}
+    xhand_left = XHandControl(hand_id=0, position=0.1, mode=3)  # Start with any ID
+    xhand_right = XHandControl(hand_id=1, position=0.1, mode=3)  # Start with any ID
     
     if not xhand_left.open_device(left_config):
         print("[ERROR]: Failed to connect to left hand")
@@ -306,6 +299,44 @@ def main():
         sys.exit(1)
     
     print("[INFO]: ✓ Real robots connected")
+    
+    # Set proper IDs for the hands
+    print("[INFO]: Setting hand IDs...")
+    try:
+        left_id_found = False
+        right_id_found = False
+        
+        try:
+            test_state = xhand_left.read_state(0, force_update=True)
+            xhand_left._hand_id = 0
+            left_id_found = True
+        except:
+            try:
+                test_state = xhand_left.read_state(1, force_update=True)
+                xhand_left._hand_id = 1
+                left_id_found = True
+            except:
+                pass
+        
+        try:
+            test_state = xhand_right.read_state(1, force_update=True)
+            xhand_right._hand_id = 1
+            right_id_found = True
+        except:
+            try:
+                test_state = xhand_right.read_state(0, force_update=True)
+                xhand_right._hand_id = 0
+                right_id_found = True
+            except:
+                pass
+        
+        if not left_id_found or not right_id_found:
+            xhand_left._hand_id = 1   # Left device (FTA7NRXW) has ID 1
+            xhand_right._hand_id = 0  # Right device (FTA6HQ26) has ID 0
+        
+        print(f"[INFO]: ✓ Hand IDs set - Left: {xhand_left._hand_id}, Right: {xhand_right._hand_id}")
+    except Exception as e:
+        print(f"[WARNING]: Could not set hand IDs: {e}")
     
     try:
         # ========== Initialize Simulation ==========
@@ -341,4 +372,5 @@ if __name__ == "__main__":
         main()
     finally:
         simulation_app.close()
+
 

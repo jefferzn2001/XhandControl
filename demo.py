@@ -1,38 +1,77 @@
-from xhandlib.xhand import XHandControl
+from xhandlib.xhand import XHandControl, get_device_configs
+import time
+import math
+import sys
+
+
+from xhandlib.xhand import XHandControl, get_device_configs
 import time
 import math
 import sys
 
 
 if __name__ == "__main__":
-    # Unified naming and mapping (same as encoder.py and tactile.py)
-    LEFT_SERIAL_PORT = "/dev/ttyUSB0"   # Left hand on USB0
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"  # Right hand on USB1
-    LEFT_ID = 1
-    RIGHT_ID = 0
-
-    # Initialize left and right hands; keep mode fixed to 3 for demo
-    xhand_l = XHandControl(hand_id=LEFT_ID, position=0.1, mode=3)
-    xhand_r = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=3)
-
-    # Open devices over RS485
-    left_device_identifier = {
-        'protocol': 'RS485',
-        'serial_port': LEFT_SERIAL_PORT,
-        'baud_rate': 3000000,
-    }
-    right_device_identifier = {
-        'protocol': 'RS485',
-        'serial_port': RIGHT_SERIAL_PORT,
-        'baud_rate': 3000000,
-    }
-
-    # Open both devices
-    if not xhand_l.open_device(left_device_identifier):
+    print("Auto-detecting USB devices...")
+    try:
+        left_config, right_config = get_device_configs()
+        print(f"Left hand:  {left_config['serial_port']}")
+        print(f"Right hand: {right_config['serial_port']}")
+    except Exception as e:
+        print(f"Error detecting devices: {e}")
         sys.exit(1)
-    if not xhand_r.open_device(right_device_identifier):
+
+    # Initialize hands - we'll set proper IDs after connection
+    xhand_l = XHandControl(hand_id=0, position=0.1, mode=3)  # Start with any ID
+    xhand_r = XHandControl(hand_id=1, position=0.1, mode=3)  # Start with any ID
+
+    # Open both devices using auto-detected configs
+    if not xhand_l.open_device(left_config):
+        print("Failed to connect to left hand")
+        sys.exit(1)
+    if not xhand_r.open_device(right_config):
+        print("Failed to connect to right hand")
         xhand_l.close()
         sys.exit(1)
+
+    print("✅ Both hands connected successfully!")
+    
+    # Set proper IDs for the hands
+    print("Setting hand IDs...")
+    try:
+        left_id_found = False
+        right_id_found = False
+        
+        try:
+            test_state = xhand_l.read_state(0, force_update=True)
+            xhand_l._hand_id = 0
+            left_id_found = True
+        except:
+            try:
+                test_state = xhand_l.read_state(1, force_update=True)
+                xhand_l._hand_id = 1
+                left_id_found = True
+            except:
+                pass
+        
+        try:
+            test_state = xhand_r.read_state(1, force_update=True)
+            xhand_r._hand_id = 1
+            right_id_found = True
+        except:
+            try:
+                test_state = xhand_r.read_state(0, force_update=True)
+                xhand_r._hand_id = 0
+                right_id_found = True
+            except:
+                pass
+        
+        if not left_id_found or not right_id_found:
+            xhand_l._hand_id = 1   # Left device (FTA7NRXW) has ID 1
+            xhand_r._hand_id = 0  # Right device (FTA6HQ26) has ID 0
+        
+        print(f"✓ Hand IDs set - Left: {xhand_l._hand_id}, Right: {xhand_r._hand_id}")
+    except Exception as e:
+        print(f"Warning: Could not set hand IDs: {e}")
 
 
     # List hand IDs (optional)
@@ -89,11 +128,26 @@ if __name__ == "__main__":
         'palm2': [0, 80.66, 33.2, 0.00, 5.11, 0, 6.53, 0, 6.76, 4.41, 10.13, 0],
     }
 
-    for action in actions_list:
-        for i in range(12):
-            xhand_l._hand_command.finger_command[i].position = actions_list[action][i] * math.pi / 180
-            xhand_r._hand_command.finger_command[i].position = actions_list[action][i] * math.pi / 180
-        # Warning: The following will move both hands
+    # Left hand: normal order (front to back)
+    # Right hand: reverse order (back to front)
+    actions_order_left = list(actions_list.keys())
+    actions_order_right = list(reversed(actions_list.keys()))
+    
+    print(f"Left hand actions: {actions_order_left}")
+    print(f"Right hand actions: {actions_order_right}")
+    
+    for i, action_left in enumerate(actions_order_left):
+        action_right = actions_order_right[i]
+        
+        # Set positions for left hand
+        for j in range(12):
+            xhand_l._hand_command.finger_command[j].position = actions_list[action_left][j] * math.pi / 180
+        
+        # Set positions for right hand  
+        for j in range(12):
+            xhand_r._hand_command.finger_command[j].position = actions_list[action_right][j] * math.pi / 180
+        
+        print(f"Executing: Left={action_left}, Right={action_right}")
         xhand_l.send_command()
         xhand_r.send_command()
         time.sleep(1)

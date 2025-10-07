@@ -50,7 +50,7 @@ from isaaclab.utils.assets import ISAAC_NUCLEUS_DIR
 from dataclasses import dataclass, field
 
 # Import XHAND hardware controller
-from xhandlib.xhand import XHandControl
+from xhandlib.xhand import XHandControl, get_device_configs
 from xhandlib.isaacsim_utils import hardware_to_urdf_order
 
 
@@ -252,17 +252,18 @@ def main():
     """Main function."""
     
     # ========== Connect Real Robots (Mode 0 - Powerless) ==========
-    LEFT_SERIAL_PORT = "/dev/ttyUSB0"
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
-    LEFT_ID = 1
-    RIGHT_ID = 0
+    print("Auto-detecting USB devices...")
+    try:
+        left_config, right_config = get_device_configs()
+        print(f"Left hand:  {left_config['serial_port']}")
+        print(f"Right hand: {right_config['serial_port']}")
+    except Exception as e:
+        print(f"Error detecting devices: {e}")
+        sys.exit(1)
     
     print("[INFO]: Connecting to real robots in ENCODER mode (powerless)...")
-    xhand_left = XHandControl(hand_id=LEFT_ID, position=0.1, mode=0)  # Mode 0 = powerless
-    xhand_right = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=0)
-    
-    left_config = {"protocol": "RS485", "serial_port": LEFT_SERIAL_PORT, "baud_rate": 3000000}
-    right_config = {"protocol": "RS485", "serial_port": RIGHT_SERIAL_PORT, "baud_rate": 3000000}
+    xhand_left = XHandControl(hand_id=0, position=0.1, mode=0)  # Start with any ID
+    xhand_right = XHandControl(hand_id=1, position=0.1, mode=0)  # Start with any ID
     
     if not xhand_left.open_device(left_config):
         print("[ERROR]: Failed to connect to left hand")
@@ -272,6 +273,48 @@ def main():
         print("[ERROR]: Failed to connect to right hand")
         xhand_left.close()
         sys.exit(1)
+
+    print("[INFO]: ✓ Real robots connected in encoder mode")
+    
+    # Set proper IDs for the hands
+    print("[INFO]: Setting hand IDs...")
+    try:
+        left_id_found = False
+        right_id_found = False
+        
+        try:
+            test_state = xhand_left.read_state(0, force_update=True)
+            xhand_left._hand_id = 0
+            left_id_found = True
+        except:
+            try:
+                test_state = xhand_left.read_state(1, force_update=True)
+                xhand_left._hand_id = 1
+                left_id_found = True
+            except:
+                pass
+        
+        try:
+            test_state = xhand_right.read_state(1, force_update=True)
+            xhand_right._hand_id = 1
+            right_id_found = True
+        except:
+            try:
+                test_state = xhand_right.read_state(0, force_update=True)
+                xhand_right._hand_id = 0
+                right_id_found = True
+            except:
+                pass
+        
+        if not left_id_found or not right_id_found:
+            xhand_left._hand_id = 1   # Left device (FTA7NRXW) has ID 1
+            xhand_right._hand_id = 0  # Right device (FTA6HQ26) has ID 0
+        
+        print(f"[INFO]: ✓ Hand IDs set - Left: {xhand_left._hand_id}, Right: {xhand_right._hand_id}")
+    except Exception as e:
+        print(f"[WARNING]: Could not set hand IDs: {e}")
+    
+    print("[INFO]: You can now manually move the robots!")
 
     
     try:
@@ -286,7 +329,7 @@ def main():
         
         sim.reset()
         
-        print("[INFO]: ✓ Simulation ready")
+        print("[INFO]:Simulation ready")
         
         # ========== Create Monitor GUI ==========
         monitor = Real2SimMonitor()
@@ -307,4 +350,5 @@ if __name__ == "__main__":
         main()
     finally:
         simulation_app.close()
+
 

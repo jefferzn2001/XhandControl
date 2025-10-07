@@ -4,11 +4,63 @@ from typing import Iterable, List, Tuple, Optional, Dict, Any
 import time
 import math
 import sys
+import os
+import glob
 
 # v1.1.7 import style
 from xhand_controller import xhand_control as xc
 
 DEFAULT_BAUD = 3_000_000
+
+def get_usb_device_mapping() -> Dict[str, str]:
+    """
+    Automatically detect USB-to-RS485 devices by their serial IDs.
+    
+    Returns:
+        Dict[str, str]: Mapping of device role to device path
+        {
+            'left': '/dev/serial/by-id/usb-FTDI_USB-RS485-WE_FTA7NRXW-if00-port0',
+            'right': '/dev/serial/by-id/usb-FTDI_USB-RS485-WE_FTA6HQ26-if00-port0'
+        }
+    """
+    # Look for FTDI USB-RS485 devices
+    device_pattern = "/dev/serial/by-id/usb-FTDI_USB-RS485-WE_*"
+    devices = glob.glob(device_pattern)
+    
+    if len(devices) != 2:
+        raise RuntimeError(f"Expected exactly 2 FTDI USB-RS485 devices, found {len(devices)}")
+    
+    # Sort devices by serial ID for consistent mapping
+    devices.sort()
+    
+    # Map first device to right, second to left (swapped based on actual ID mapping)
+    return {
+        'left': devices[1],   # Second device → left hand
+        'right': devices[0]    # First device → right hand
+    }
+
+def get_device_configs() -> Tuple[Dict[str, Any], Dict[str, Any]]:
+    """
+    Get device configurations for both hands using USB by-id mapping.
+    
+    Returns:
+        Tuple[Dict, Dict]: (left_config, right_config)
+    """
+    mapping = get_usb_device_mapping()
+    
+    left_config = {
+        "protocol": "RS485",
+        "serial_port": mapping['left'],
+        "baud_rate": DEFAULT_BAUD
+    }
+    
+    right_config = {
+        "protocol": "RS485", 
+        "serial_port": mapping['right'],
+        "baud_rate": DEFAULT_BAUD
+    }
+    
+    return left_config, right_config
 
 class XHandControl:
     """
@@ -335,6 +387,31 @@ class XHandControl:
         return t
 
     # ---------- sensor operations ----------
+    def reset_all_tactile_sensors(self, hand_id: int) -> Dict[str, bool]:
+        """
+        Reset all tactile sensors for a hand to reduce noise.
+        
+        Args:
+            hand_id (int): Hand ID
+            
+        Returns:
+            Dict[str, bool]: Results for each sensor reset attempt
+        """
+        results = {}
+        
+        # Known sensor IDs for fingertips: {2, 5, 7, 9, 11}
+        fingertip_sensor_ids = [2, 5, 7, 9, 11]
+        
+        for sensor_id in fingertip_sensor_ids:
+            try:
+                success = self.reset_sensor(hand_id, sensor_id)
+                results[f"sensor_{sensor_id}"] = success
+            except Exception as e:
+                print(f"Error resetting sensor {sensor_id}: {e}")
+                results[f"sensor_{sensor_id}"] = False
+        
+        return results
+
     def reset_sensor(self, hand_id: int, sensor_id: int = 17) -> bool:
         """
         Reset fingertip sensor.

@@ -5,22 +5,20 @@ Tested on **Ubuntu 22.04** and **Windows 10/11** with **Python 3.10+**.
 
 ---
 
+## 🚀 Quick Start
 
+The system now uses **automatic device detection** via `/dev/serial/by-id` mapping:
+- **Left hand**: `FTA7NRXW` → ID 1
+- **Right hand**: `FTA6HQ26` → ID 0
 
-- Clean API in `xhandlib/xhand.py` (removed `exam_` prefixes). Use:
-  - `open_device(...)`, `close()`
-  - `read_state(hand_id, force_update=True)`
-  - `get_sdk_version()`, `read_version(hand_id)`, `get_info(hand_id)`, `get_hand_type(hand_id)`, `get_serial_number(hand_id)`
-  - `send_command()` to send the prebuilt `_hand_command`, or `set_hand_mode(...)` to set modes
-- Unified scripts and naming:
-  - `demo.py` (mode=3) dual-hand motions
-  - `encoder.py` (mode=0) live joint angles GUI (degrees)
-  - `tactile.py` (mode=0) live tactile GUI (5 fingers per hand)
-- Standard mapping used across scripts:
-  - Left hand: `/dev/ttyUSB0`, ID=1
-  - Right hand: `/dev/ttyUSB1`, ID=0
-- **Note**: IDs don't persist after power cycle. Set manually each time using `xhandlib/ID.py`
-- After installing the SDK wheel, you can delete the `xhand_control_sdk_py/` folder.
+**No more manual ID setting required!** Just plug in USB devices in any order.
+
+### Available Scripts:
+- `demo.py` - Dual-hand motion demonstration (different action orders for each hand)
+- `encoder.py` - Live joint angle monitoring GUI
+- `tactile.py` - Live tactile sensor visualization with reset functionality
+- `sim2real.py` - Isaac Sim GUI controlling both simulation and real robots
+- `real2sim.py` - Real robot teleoperation mirrored in Isaac Sim
 
 ---
 
@@ -64,84 +62,70 @@ export PYTHONPATH=$(pwd):$PYTHONPATH
 
 ---
 
-## 🔧 Hardware Setup for Dual Hands
+## 🔧 Hardware Setup
 
-### USB Device Configuration
+### Automatic Device Detection
 
-When using **two USB-to-RS485 adapters** for dual hand control:
+The system automatically detects devices using `/dev/serial/by-id` mapping:
 
-1. **Connect each hand to separate USB ports**:
-   ```
-   Left Hand  → USB Port 1 → /dev/ttyUSB0 (Linux)
-
-   python -m xhandlib.ID --port /dev/ttyUSB0 --target 1
-
-   Then put righthand
-   ```
-
-**Important**: IDs do NOT persist after power cycling. You must set IDs each time you power on the hands. Do NOT power-cycle after setting IDs - they are active immediately.
-
-
-
-## 📋 API Reference
-
-### XHandControl Class
-
-The main control class located in `xhandlib/xhand.py`.
-
-#### Constructor
-```python
-XHandControl(hand_id=0, position=0.1, mode=3)
+```bash
+# Check your device mapping
+ls -l /dev/serial/by-id
+# Should show:
+# FTA7NRXW -> /dev/ttyUSB0 (Left hand)
+# FTA6HQ26 -> /dev/ttyUSB1 (Right hand)
 ```
-- `hand_id` (int): Hand identifier (0-125)
-- `position` (float): Default finger position (0.0-1.0)
-- `mode` (int): Control mode (0=powerless, 3=position, 5=powerful)
 
-#### Device Management Methods
+**No manual configuration needed!** Just:
+1. Connect both hands to USB ports
+2. Run any script - device detection is automatic
+3. IDs are automatically assigned based on hardware serial numbers
 
-| Method | Description |
-|--------|-------------|
-| `enumerate_devices(protocol)` | List available ports |
-| `open_device(device_identifier)` | Open device connection |
-| `close()` | Close device connection |
-| `list_ids()` | List connected hand IDs |
 
-#### Information Methods
 
-| Method | Description |
-|--------|-------------|
-| `get_sdk_version()` | Get software SDK version |
-| `read_version(hand_id)` | Get hardware SDK version |
-| `get_info(hand_id)` | Get device information |
-| `get_hand_type(hand_id)` | Get hand type (left/right) |
-| `get_serial_number(hand_id)` | Get serial number |
-| `get_hand_name(hand_id)` | Get hand name |
-| `set_hand_name(hand_id, new_name)` | Set hand name |
+## 📋 Usage Examples
 
-#### Control Methods
-
-| Method | Description | Warning |
-|--------|-------------|-----------|
-| `send_command()` | Send prebuilt `_hand_command` | **MOVES HAND** |
-| `send_command(hand_id, HandCommand_t)` | Send explicit command | **MOVES HAND** |
-| `set_hand_mode(mode, hand_id=...)` | Set control mode | **MOVES HAND** |
-| `read_state(hand_id, force_update)` | Read hand state | Safe |
-
-#### Sensor Methods
-
-| Method | Description |
-|--------|-------------|
-| `read_state(hand_id, force_update=True)` | Returns sensor/tactile if available |
-| `reset_sensor(hand_id)` | May be unsupported on some firmware |
-
-### Device Configuration Examples
-
-#### RS485 Configuration
+### Basic Usage
 ```python
-device_config = {
-    "protocol": "RS485",
-    "serial_port": "/dev/ttyUSB0",  # Linux
-    # "serial_port": "COM3",        # Windows
-    "baud_rate": 3000000
-}
+from xhandlib.xhand import get_device_configs, XHandControl
+
+# Get automatic device configurations
+configs = get_device_configs()
+left_config, right_config = configs['left'], configs['right']
+
+# Initialize hands
+xhand_left = XHandControl(hand_id=1, mode=3)  # Position control
+xhand_right = XHandControl(hand_id=0, mode=3)
+
+# Connect to devices
+xhand_left.open_device(left_config)
+xhand_right.open_device(right_config)
+
+# Read state
+state_left = xhand_left.read_state(xhand_left._hand_id, force_update=True)
+state_right = xhand_right.read_state(xhand_right._hand_id, force_update=True)
+
+# Send commands (moves the hands!)
+xhand_left.send_command()
+xhand_right.send_command()
+
+# Close connections
+xhand_left.close()
+xhand_right.close()
+```
+
+### Running Scripts
+```bash
+# Motion demonstration (different orders for each hand)
+python demo.py
+
+# Live encoder monitoring
+python encoder.py
+
+# Tactile sensor visualization
+python tactile.py
+
+# Isaac Sim integration (requires Isaac Sim)
+python sim2real.py    # GUI controls both sim and real
+python real2sim.py    # Real robot teleoperation
 ```

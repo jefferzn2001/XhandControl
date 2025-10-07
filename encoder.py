@@ -1,4 +1,4 @@
-from xhandlib.xhand import XHandControl
+from xhandlib.xhand import XHandControl, get_device_configs
 import sys
 import math
 import tkinter as tk
@@ -27,33 +27,66 @@ def clamp_deg(j_index: int, value_deg: float) -> float:
 
 
 if __name__ == "__main__":
-    # Unified naming and mapping (same as tactile.py and demo.py)
-    LEFT_SERIAL_PORT = "/dev/ttyUSB0"
-    RIGHT_SERIAL_PORT = "/dev/ttyUSB1"
-    LEFT_ID = 1
-    RIGHT_ID = 0
+    print("Auto-detecting USB devices...")
+    try:
+        left_config, right_config = get_device_configs()
+        print(f"Left hand:  {left_config['serial_port']}")
+        print(f"Right hand: {right_config['serial_port']}")
+    except Exception as e:
+        print(f"Error detecting devices: {e}")
+        sys.exit(1)
 
     # Keep mode fixed to 0 for encoder
-    xhand_l = XHandControl(hand_id=LEFT_ID, position=0.1, mode=0)
-    xhand_r = XHandControl(hand_id=RIGHT_ID, position=0.1, mode=0)
+    xhand_l = XHandControl(hand_id=0, position=0.1, mode=0)  # Start with any ID
+    xhand_r = XHandControl(hand_id=1, position=0.1, mode=0)  # Start with any ID
 
-    # Open devices over RS485
-    left_device_identifier = {
-        "protocol": "RS485",
-        "serial_port": LEFT_SERIAL_PORT,
-        "baud_rate": 3000000,
-    }
-    right_device_identifier = {
-        "protocol": "RS485",
-        "serial_port": RIGHT_SERIAL_PORT,
-        "baud_rate": 3000000,
-    }
-
-    if not xhand_l.open_device(left_device_identifier):
+    if not xhand_l.open_device(left_config):
+        print("Failed to connect to left hand")
         sys.exit(1)
-    if not xhand_r.open_device(right_device_identifier):
+    if not xhand_r.open_device(right_config):
+        print("Failed to connect to right hand")
         xhand_l.close()
         sys.exit(1)
+
+    print("✅ Both hands connected successfully!")
+    
+    # Set proper IDs for the hands
+    print("Setting hand IDs...")
+    try:
+        left_id_found = False
+        right_id_found = False
+        
+        try:
+            test_state = xhand_l.read_state(0, force_update=True)
+            xhand_l._hand_id = 0
+            left_id_found = True
+        except:
+            try:
+                test_state = xhand_l.read_state(1, force_update=True)
+                xhand_l._hand_id = 1
+                left_id_found = True
+            except:
+                pass
+        
+        try:
+            test_state = xhand_r.read_state(1, force_update=True)
+            xhand_r._hand_id = 1
+            right_id_found = True
+        except:
+            try:
+                test_state = xhand_r.read_state(0, force_update=True)
+                xhand_r._hand_id = 0
+                right_id_found = True
+            except:
+                pass
+        
+        if not left_id_found or not right_id_found:
+            xhand_l._hand_id = 1   # Left device (FTA7NRXW) has ID 1
+            xhand_r._hand_id = 0  # Right device (FTA6HQ26) has ID 0
+        
+        print(f"✓ Hand IDs set - Left: {xhand_l._hand_id}, Right: {xhand_r._hand_id}")
+    except Exception as e:
+        print(f"Warning: Could not set hand IDs: {e}")
 
 
     # Build a simple live GUI for encoder angles
@@ -89,22 +122,22 @@ if __name__ == "__main__":
             finger_states_l = getattr(state_l, "finger_state", [])
             finger_states_r = getattr(state_r, "finger_state", [])
 
-            # Convert to degrees; mapping note:
-            # Here we intentionally swap: Left row shows xhand_r, Right row shows xhand_l
+            # Convert to degrees; correct mapping:
+            # Left row shows xhand_l (left device), Right row shows xhand_r (right device)
             for i in range(12):
                 deg_row_left = 0.0
                 deg_row_right = 0.0
 
-                if i < len(finger_states_r):
-                    fs = finger_states_r[i]
+                if i < len(finger_states_l):
+                    fs = finger_states_l[i]
                     val = getattr(fs, "position", 0.0)
                     try:
                         deg_row_left = math.degrees(float(val))
                     except Exception:
                         deg_row_left = 0.0
 
-                if i < len(finger_states_l):
-                    fs = finger_states_l[i]
+                if i < len(finger_states_r):
+                    fs = finger_states_r[i]
                     val = getattr(fs, "position", 0.0)
                     try:
                         deg_row_right = math.degrees(float(val))
